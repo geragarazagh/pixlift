@@ -16,7 +16,7 @@ Apple silicon, macOS 13 або новіша. Інтерфейс англійсь
 
 ## Встановлення
 
-**Mac** (Apple silicon, macOS 13 або новіша): завантажити [`Pixlift.dmg`](https://github.com/geragarazagh/pixlift/releases/latest/download/Pixlift.dmg) (1,5 МБ), відкрити його й перетягнути `Pixlift.app` в Applications. Наступні версії надходять через «Перевірити наявність оновлень».
+**Mac** (Apple silicon, macOS 13 або новіша): завантажити [`Pixlift.dmg`](https://github.com/geragarazagh/pixlift/releases/latest/download/Pixlift.dmg) (1,6 МБ), відкрити його й перетягнути `Pixlift.app` в Applications. Наступні версії надходять через «Перевірити наявність оновлень».
 
 Або через [Homebrew](https://brew.sh):
 
@@ -122,7 +122,7 @@ brew uninstall --zap pixlift
 
 - Версія: 0.2.
 - Ідентифікатор: `com.geragaraza.pixlift`.
-- Завантаження: `Pixlift.dmg`, 1,5 МБ.
+- Завантаження: `Pixlift.dmg`, 1,6 МБ.
 - Потрібно: Apple silicon, macOS 13 або новіша.
 - Дозволи: записування системного звуку й екрана, мікрофон. Мережа: лише перевірка оновлень.
 - Підписано Developer ID і нотаризовано Apple.
