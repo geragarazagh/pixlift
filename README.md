@@ -10,6 +10,10 @@ Copy Text is the recognition of [OCR](https://github.com/geragarazagh/ocr) and C
 
 Apple silicon, macOS 13 or later. Interface in English, Ukrainian and Russian. Signed with a Developer ID and notarized by Apple.
 
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/scene.webp"><img src="docs/scene-light.webp" alt="Preview with the Wright brothers’ telegram of 17 December 1903; beside it a note holding a capture of the whole screen, which holds the same screen again, smaller each time; on the Desktop five captures named by their time, 2025-12-17 17-25-00 to 17-25-59"></picture>
+
+The Wright brothers’ telegram of 17 December 1903 in Preview. Option-Command-7 took an area of it, and the note got the capture from the clipboard; then Option-Command-9 took the whole screen four times, each pasted over the last. Every capture lands on the Desktop, named by the time it was taken.
+
 ## Install
 
 **Mac** (Apple silicon, macOS 13 or later): download [`Pixlift.dmg`](https://github.com/geragarazagh/pixlift/releases/latest/download/Pixlift.dmg) (1.5 MB), open it and drag `Pixlift.app` to Applications. Later versions arrive through Check for Updates.
