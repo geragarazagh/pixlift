@@ -5,6 +5,7 @@
 // sizeToFit): the longest label is ru «Снимок выбранной области» (179 pt), the widest key button ru «Нажмите
 // сочетание» (152 pt as AppKit sizes it), the longest switch label uk «Відкривати під час входу в систему» (226 pt).
 // 20 pt margins, 12 pt between a label and its control, key buttons 160 pt: 208 pt of label, 29 to spare.
+// `extra` (0.2: where captures go, destinations.swift) sits between the key rows and Open at Login, in the same columns.
 //
 // - Hot keys are Carbon RegisterEventHotKey: no Accessibility permission. Stored as virtual key codes,
 //   physical keys, so they work in every keyboard layout.
@@ -158,11 +159,15 @@ final class AppIconView: NSImageView {
     var notes: [NSTextField] = []  // a row's state, under its label
     let loginSwitch = NSSwitch()
 
-    private static let W: CGFloat = 420, M: CGFloat = 20, rowH: CGFloat = 34, rowsY: CGFloat = 96
+    static let W: CGFloat = 420, M: CGFloat = 20, controlW: CGFloat = 160, rowH: CGFloat = 34
+    let rowsY: CGFloat             // the lowest key row
+    let extra: NSView?
 
-    init(name: String, rows: [Row], showAtLaunch: Bool = true) {
+    init(name: String, rows: [Row], extra: NSView? = nil, showAtLaunch: Bool = true) {
         self.name = name
         self.rows = rows
+        self.extra = extra
+        rowsY = 96 + (extra.map { $0.frame.height } ?? 0)
         let id = Bundle.main.bundleIdentifier ?? ""
         login = SMAppService.agent(plistName: "\(id).login.plist")
         let d = UserDefaults.standard
@@ -172,7 +177,7 @@ final class AppIconView: NSImageView {
         hotKeys = Array(repeating: nil, count: rows.count)
         holder = Array(repeating: nil, count: rows.count)
         failed = Array(repeating: false, count: rows.count)
-        let top = Self.rowsY + CGFloat(rows.count - 1) * Self.rowH + 28
+        let top = rowsY + CGFloat(rows.count - 1) * Self.rowH + 28
         // Non-activating: it takes the keys even when macOS declines to bring a background app forward.
         panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: Self.W, height: top + 172), styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
@@ -230,7 +235,7 @@ final class AppIconView: NSImageView {
         panel.standardWindowButton(.zoomButton)?.isHidden = true
         let v = panel.contentView!
         let W = Self.W, M = Self.M
-        let top = Self.rowsY + CGFloat(rows.count - 1) * Self.rowH + 28
+        let top = rowsY + CGFloat(rows.count - 1) * Self.rowH + 28
 
         func text(_ s: String, _ font: NSFont, _ color: NSColor, _ frame: NSRect, _ align: NSTextAlignment) -> NSTextField {
             let l = NSTextField(labelWithString: s)
@@ -255,9 +260,9 @@ final class AppIconView: NSImageView {
         updates.frame.origin = NSPoint(x: (W - updates.frame.width) / 2, y: top + 8)
         v.addSubview(updates)
 
-        let buttonW: CGFloat = 160, labelW = W - 2 * M - buttonW - 12
+        let buttonW = Self.controlW, labelW = W - 2 * M - buttonW - 12
         for (i, row) in rows.enumerated() {
-            let y = Self.rowsY + CGFloat(rows.count - 1 - i) * Self.rowH
+            let y = rowsY + CGFloat(rows.count - 1 - i) * Self.rowH
             labels.append(text(row.label, .systemFont(ofSize: 13), .labelColor, NSRect(x: M, y: y + 5, width: labelW, height: 18), .left))
             notes.append(text("", .systemFont(ofSize: 10), .secondaryLabelColor, NSRect(x: M, y: y - 1, width: labelW, height: 13), .left))
             let b = NSButton(title: "", target: self, action: #selector(keyButtonClicked(_:)))
@@ -270,12 +275,18 @@ final class AppIconView: NSImageView {
             buttons.append(b)
         }
 
+        if let extra {
+            extra.frame.origin = NSPoint(x: 0, y: 90)
+            v.addSubview(extra)
+        }
+
         loginSwitch.controlSize = .small
         loginSwitch.sizeToFit()
         _ = text(L("Open at Login"), .systemFont(ofSize: 13), .labelColor, NSRect(x: M, y: 59, width: W - 2 * M - loginSwitch.frame.width - 12, height: 18), .left)
         loginSwitch.frame.origin = NSPoint(x: W - M - loginSwitch.frame.width + 5, y: 58)   // the switch draws 5 pt inside its frame
         loginSwitch.target = self; loginSwitch.action = #selector(loginChanged)
         loginSwitch.refusesFirstResponder = true
+        loginSwitch.setAccessibilityLabel(L("Open at Login"))
         v.addSubview(loginSwitch)
 
         // The repository's address comes from Info.plist (GitHubURL, written by ./build from the app's name).
@@ -315,6 +326,7 @@ final class AppIconView: NSImageView {
     @objc func checkForUpdates() { Updates.shared.check() }
 
     func refresh() {
+        (extra as? DestinationsView)?.refresh()
         for i in rows.indices { setNote(i, holder[i].map { String(format: L("Used by %@"), $0) } ?? (failed[i] ? L("This shortcut can’t be used") : "")) }
         for (i, b) in buttons.enumerated() {
             b.state = .off
@@ -332,7 +344,7 @@ final class AppIconView: NSImageView {
     func setNote(_ i: Int, _ s: String) {
         guard i < notes.count else { return }
         notes[i].stringValue = s
-        let y = Self.rowsY + CGFloat(rows.count - 1 - i) * Self.rowH
+        let y = rowsY + CGFloat(rows.count - 1 - i) * Self.rowH
         labels[i].frame.origin.y = s.isEmpty ? y + 5 : y + 11
     }
 

@@ -1,5 +1,5 @@
 // Pixlift: screenshots, screen recording, text and colour from the screen, one key each.
-// Every capture lands on the Desktop and on the clipboard at once. Apple parts only: screencapture and
+// Each capture is saved, copied, or both, as the window sets it for screenshots and for recordings. Apple parts only: screencapture and
 // ScreenCaptureKit, AVFoundation, Vision, NSColorSampler, Carbon hot keys; Sparkle for updates. No logs; the only
 // network call is Sparkle's daily update check (updates.swift), which asks before installing anything.
 //
@@ -29,7 +29,7 @@ func answersForItself() -> Bool {
 
 let args = CommandLine.arguments
 // The command-line modes act only for a caller that answers for itself (security pass 2026-11-14): started by another
-// program as an app, --file would read pictures with Pixlift's own folder permissions (the Desktop's, which saving
+// program as an app, --file would read pictures with Pixlift's own folder permissions (the Desktop's or a picked folder's, which saving
 // screenshots there needs) and hand their text to that program, and --pasteboard would send every capture to a
 // pasteboard of its choosing.
 let commandLine = !answersForItself()

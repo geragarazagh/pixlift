@@ -29,3 +29,12 @@
 "The screenshot was not saved" = "знімок не збережено";
 "The recording did not start" = "записування не почалося";
 "The recording was not saved" = "запис не збережено";
+"Screenshot" = "Знімок екрана";
+"Screen Recording" = "Запис екрана";
+"Save to" = "Місце збереження";
+"Desktop" = "Робочий стіл";
+"Other Location…" = "Інше місце…";
+"Clipboard" = "Буфер обміну";
+"Choose" = "Вибрати";
+"The folder “%@” can’t be found." = "Теку «%@» не знайдено.";
+"Saved to the Desktop:" = "Збережено на робочий стіл:";

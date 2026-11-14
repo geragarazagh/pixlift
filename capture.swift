@@ -11,6 +11,7 @@
 //   "Play user interface sound effects" switch by itself (kAudioServicesPropertyIsUISound), the way the
 //   shutter of macOS's own screenshot does, and stays silent while a recording runs.
 // - Names are plain local time, "2026-11-14 05-47-12.png": the app writes its own files, so it names them.
+// - Where a capture goes (a folder, the clipboard, both): destinations.swift.
 
 import AppKit
 import AudioToolbox
@@ -75,11 +76,9 @@ func freeName(in folder: URL, for date: Date, ext: String) -> URL {
     return url
 }
 
-var desktop: URL { FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0] }
-
-/// Moves a finished file to its place under a free name. On the same volume this is a rename.
-func deliver(_ temp: URL, date: Date, ext: String) throws -> URL {
-    let dest = freeName(in: desktop, for: date, ext: ext)
+/// Moves a finished file into a folder under a free name. On the same volume this is a rename.
+func deliver(_ temp: URL, to folder: URL, date: Date, ext: String) throws -> URL {
+    let dest = freeName(in: folder, for: date, ext: ext)
     try FileManager.default.moveItem(at: temp, to: dest)
     return dest
 }
@@ -89,7 +88,8 @@ func deliver(_ temp: URL, date: Date, ext: String) throws -> URL {
 /// One item, so a paste gives one thing: the file (Finder and other file-aware apps take it, with its name)
 /// and, for a picture, the picture itself (Telegram, Notes, Messages, browsers take that). The PNG is the
 /// file's own bytes, colour profile included. TIFF, for apps that read only that, is made when one asks.
-/// Each new capture replaces what was there.
+/// Each new capture replaces what was there. A screenshot that is not saved goes as the picture alone, as macOS's own
+/// Clipboard setting puts it: there is no file to give.
 final class Clipboard: NSObject, NSPasteboardItemDataProvider {
     let pasteboard: NSPasteboard
     private var png: Data?
@@ -115,6 +115,15 @@ final class Clipboard: NSObject, NSPasteboardItemDataProvider {
             item.setData(data, forType: .png)
             item.setDataProvider(self, forTypes: [.tiff])
         }
+        pasteboard.clearContents()
+        pasteboard.writeObjects([item])
+    }
+
+    func put(picture data: Data) {
+        let item = NSPasteboardItem()
+        png = data
+        item.setData(data, forType: .png)
+        item.setDataProvider(self, forTypes: [.tiff])
         pasteboard.clearContents()
         pasteboard.writeObjects([item])
     }

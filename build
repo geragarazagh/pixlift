@@ -5,7 +5,7 @@
 set -e
 cd "${0:A:h}"
 # The version changes per release, not per build.
-name=Pixlift version=0.1 min=13.0
+name=Pixlift version=0.2 min=13.0
 id=com.geragaraza.${(L)name} app=$name.app repo=https://github.com/geragarazagh/${(L)name}
 tmp=$(mktemp -d); trap 'rm -rf $tmp' EXIT
 rm -rf "$app"
@@ -35,7 +35,7 @@ done
 # An explicit minimum: by default swiftc targets this Mac's macOS and every older system refuses the result.
 # 13: ScreenCaptureKit's system sound and Vision's Cyrillic both start there. Apple silicon only.
 swiftc -O -target arm64-apple-macos$min -F vendor -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
-  -o "$app/Contents/MacOS/$name" main.swift app.swift capture.swift record.swift ocr.swift window.swift updates.swift
+  -o "$app/Contents/MacOS/$name" main.swift app.swift capture.swift destinations.swift record.swift ocr.swift window.swift updates.swift
 
 # App icon, Apple's way (apps.md, «Icons»): the picture from icon.swift, the plate is the system's own fill, compiled
 # by Xcode's actool into Assets.car (macOS 26+ switch it with the theme) and AppIcon.icns (Apple's light rendition, 13-15).

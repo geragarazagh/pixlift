@@ -6,6 +6,20 @@ import Carbon.HIToolbox
 
 let args = CommandLine.arguments
 nonisolated(unsafe) var failures = 0
+// One defaults suite for every settings test, emptied before each use and deleted at the end: a suite per case left a
+// plist per case and run in ~/Library/Preferences (removePersistentDomain empties a domain, its file stays).
+let suite = "pixlift-tests-settings"
+func freshDefaults() -> UserDefaults {
+    let d = UserDefaults(suiteName: suite)!
+    d.removePersistentDomain(forName: suite)
+    return d
+}
+func dropDefaults() {
+    UserDefaults().removePersistentDomain(forName: suite)
+    CFPreferencesAppSynchronize(suite as CFString)
+    let file = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Preferences/\(suite).plist")
+    try? FileManager.default.removeItem(at: file)
+}
 func check(_ ok: Bool, _ what: String) { print(ok ? "PASS" : "FAIL", what); if !ok { failures += 1 } }
 
 switch args[1] {
@@ -57,7 +71,115 @@ case "clipboard":
     clip.put(movie, picture: false)
     let after = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
     check(after?.map(\.path) == [movie.path] && pb.data(forType: .png) == nil && pb.pasteboardItems?.count == 1, "a video replaces the picture: one file URL, no image")
+    // A screenshot that is not saved: the picture alone, no file URL.
+    let bytes = try! Data(contentsOf: file)
+    clip.put(picture: bytes)
+    let none = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    check(pb.pasteboardItems?.count == 1 && none.isEmpty && pb.data(forType: .png) == bytes, "picture only: one item, PNG, no file")
+    check(NSBitmapImageRep(data: pb.data(forType: .tiff) ?? Data())?.pixelsWide == src.pixelsWide, "picture only: TIFF on demand")
     pb.releaseGlobally()
+
+case "destinations":
+    // args: a scratch folder. The settings logic of 0.2 on a private defaults suite, never the app's own.
+    let dir = URL(fileURLWithPath: args[2])
+    func fresh(_ name: String) -> UserDefaults { freshDefaults() }
+    // The legacy folder sits in the home folder, so that `~` in macOS's value is really expanded (removed at the end).
+    let shots = dir.appendingPathComponent("Shots"), legacy = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Caches/pixlift-test-\(getpid())")
+    defer { try? FileManager.default.removeItem(at: legacy) }
+    for f in [shots, legacy] { try! FileManager.default.createDirectory(at: f, withIntermediateDirectories: true) }
+
+    // A new person, macOS never told anything: the Desktop, clipboard off, both kinds (macOS 27.2's own default, measured).
+    var d = fresh("new"); var s = Destinations(d)
+    s.migrate(macOS: [:])
+    check(s.get(.shot) == Destination(place: .desktop, clipboard: false) && s.get(.video) == Destination(place: .desktop, clipboard: false),
+          "new person: Desktop, clipboard off (\(s.get(.shot)), \(s.get(.video)))")
+    check(s.folder(.shot)?.url == desktop && s.folder(.shot)?.missing == nil, "new person: saved to \(s.folder(.shot)?.url.path ?? "-")")
+    check(d.string(forKey: "shot.saveTo") == "desktop" && d.object(forKey: "shot.clipboard") as? Bool == false, "the first launch writes the settings out")
+
+    // Someone who ran 0.1: the Desktop and the clipboard, both, as 0.1 always did.
+    d = fresh("upgrade"); d.set(true, forKey: "launched"); s = Destinations(d)
+    s.migrate(macOS: ["location": shots.path, "target": "clipboard"])
+    check(s.get(.shot) == Destination(place: .desktop, clipboard: true) && s.get(.video) == Destination(place: .desktop, clipboard: true),
+          "0.1 user keeps Desktop + clipboard, whatever macOS says (\(s.get(.shot)), \(s.get(.video)))")
+    // Migration runs once: a later choice stays.
+    s.set(.shot, Destination(place: .notSaved, clipboard: true))
+    s.migrate(macOS: [:])
+    check(s.get(.shot).place == .notSaved, "migration does not run twice")
+
+    // macOS 13-15 (and 27 before its Screenshot tool was opened): one `location` for both kinds, `~` expanded.
+    d = fresh("legacy"); s = Destinations(d)
+    let tilde = legacy.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    check(tilde.hasPrefix("~/"), "legacy test value \(tilde)")
+    s.migrate(macOS: ["location": tilde + "/"])
+    check(s.get(.shot) == Destination(place: .folder, folder: legacy.path, clipboard: false) && s.get(.video).folder == legacy.path,
+          "legacy location for both (\(s.get(.shot).folder ?? "-"))")
+
+    // macOS 27: a place per kind; no location-screenrecording beside its target means the Desktop, even with a stale `location`.
+    d = fresh("split"); s = Destinations(d)
+    s.migrate(macOS: ["target-screenshot": "file", "target-screenrecording": "file", "location-screenshot": shots.path, "location": legacy.path])
+    check(s.get(.shot).folder == shots.path && s.get(.shot).place == .folder, "27: screenshots to location-screenshot")
+    check(s.get(.video).place == .desktop, "27: recordings without location-screenrecording go to the Desktop")
+
+    // Screenshots set to Clipboard in macOS: clipboard on, not saved. Recordings have no such target.
+    d = fresh("clip"); s = Destinations(d)
+    s.migrate(macOS: ["target-screenshot": "clipboard", "target-screenrecording": "file"])
+    check(s.get(.shot) == Destination(place: .notSaved, clipboard: true) && s.get(.video) == Destination(place: .desktop, clipboard: false),
+          "macOS Clipboard: shots copied only, recordings saved")
+
+    // A location that is not a folder, or is the Desktop itself: the Desktop.
+    for loc in [dir.appendingPathComponent("gone").path, desktop.path + "/", "/etc/hosts"] {
+        let x = Destinations(fresh("bad")); x.migrate(macOS: ["location": loc])
+        check(x.get(.shot) == Destination(place: .desktop, clipboard: false), "location \(loc): the Desktop")
+    }
+
+    // Both off is refused, from either side.
+    d = fresh("both"); s = Destinations(d); s.migrate(macOS: [:])
+    check(!s.set(.shot, Destination(place: .notSaved, clipboard: false)) && s.get(.shot).place == .desktop, "None refused while the clipboard is off")
+    check(s.set(.shot, Destination(place: .notSaved, clipboard: true)), "None allowed with the clipboard on")
+    check(!s.set(.shot, Destination(place: .notSaved, clipboard: false)) && s.get(.shot).clipboard, "clipboard off refused while not saved")
+    check(!s.set(.video, Destination(place: .folder, folder: nil, clipboard: true)), "a folder without a path refused")
+    // A pair edited by hand into both off reads as copied.
+    d.set("none", forKey: "video.saveTo"); d.set(false, forKey: "video.clipboard")
+    check(s.get(.video) == Destination(place: .notSaved, clipboard: true), "hand-edited both off reads as clipboard on")
+
+    // A picked folder that went away: the Desktop, and its path is reported.
+    let tmpFolder = dir.appendingPathComponent("Unplugged")
+    try! FileManager.default.createDirectory(at: tmpFolder, withIntermediateDirectories: true)
+    s.set(.video, Destination(place: .folder, folder: tmpFolder.path, clipboard: false))
+    check(s.folder(.video)?.url.path == tmpFolder.path && s.folder(.video)?.missing == nil, "picked folder used")
+    try! FileManager.default.removeItem(at: tmpFolder)
+    check(s.folder(.video)?.url == desktop && s.folder(.video)?.missing == tmpFolder.path, "missing folder: Desktop, reported")
+    // Desktop chosen again: the picked folder is remembered for the menu.
+    s.set(.video, Destination(place: .desktop, folder: shots.path, clipboard: false))
+    check(s.get(.video).folder == shots.path && s.folder(.video)?.url == desktop, "Desktop chosen, picked folder remembered")
+    dropDefaults()
+
+case "sweep":
+    // args: a scratch folder. Recordings kept only for the clipboard: deleted once off the clipboard and an hour old.
+    let dir = URL(fileURLWithPath: args[2]).appendingPathComponent("Clipboard")
+    let d = freshDefaults()
+    let pb = NSPasteboard(name: .init("pixlift-test-sweep-\(getpid())"))
+    let files = ClipboardFiles(folder: dir, defaults: d, pasteboard: pb)
+    let clip = Clipboard(pb)
+    func temp() -> URL { let u = URL(fileURLWithPath: args[2]).appendingPathComponent(UUID().uuidString + ".mp4"); FileManager.default.createFile(atPath: u.path, contents: Data([1])); return u }
+    let date = Date()
+    let a = try! files.keep(temp(), date: date, ext: "mp4")
+    clip.put(a, picture: false); files.placed(a)
+    check(a.deletingLastPathComponent().path == dir.path && a.lastPathComponent == nameFormat.string(from: date) + ".mp4", "kept under its own name in the clipboard folder (\(a.lastPathComponent))")
+    files.sweep(now: date.addingTimeInterval(7200))
+    check(FileManager.default.fileExists(atPath: a.path), "on the clipboard: kept, however old")
+    let b = try! files.keep(temp(), date: date, ext: "mp4")
+    clip.put(b, picture: false); files.placed(b)
+    check(b.lastPathComponent.hasSuffix(" (2).mp4"), "a second one beside it: \(b.lastPathComponent)")
+    files.sweep(now: date.addingTimeInterval(60))
+    check(FileManager.default.fileExists(atPath: a.path), "off the clipboard but young: kept (a paste may still be reading it)")
+    files.sweep(now: date.addingTimeInterval(7200))
+    check(!FileManager.default.fileExists(atPath: a.path) && FileManager.default.fileExists(atPath: b.path), "off the clipboard and old: deleted; the one on it stays")
+    pb.clearContents(); pb.setString("something else", forType: .string)
+    files.sweep(now: date.addingTimeInterval(7200))
+    check(!FileManager.default.fileExists(atPath: b.path) && !FileManager.default.fileExists(atPath: dir.path), "clipboard moved on: deleted, the empty folder too")
+    pb.releaseGlobally()
+    dropDefaults()
 
 case "mix":
     // Two synthetic sources with jitter and a dropout: 440 Hz as the Mac's sound (stereo, 48 kHz, float),
@@ -227,10 +349,30 @@ case "render":
     MainActor.assumeIsolated {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
-        let w = AppWindow(name: "Pixlift", rows: Action.allCases.map { a in Row(id: a.id, label: a.label, defaultShortcut: a.defaultShortcut) { } }, showAtLaunch: false)
+        // The settings as args[4] says: "default" (a new person), "upgrade" (0.1: both on), "mixed" (a picked folder for
+        // screenshots, recordings copied only: None picked, the switch greyed).
+        let d = freshDefaults()   // in "show" mode it stays until the next run or `defaults delete pixlift-tests-settings`
+        let s = Destinations(d)
+        let mode = args.count > 4 ? args[4] : "default"
+        if mode == "upgrade" { d.set(true, forKey: "launched") }
+        s.migrate(macOS: [:])
+        if mode == "mixed" {
+            s.set(.shot, Destination(place: .folder, folder: NSHomeDirectory() + "/Pictures", clipboard: false))
+            s.set(.video, Destination(place: .notSaved, clipboard: true))
+        }
+        let extra = DestinationsView(width: AppWindow.W, margin: AppWindow.M, controlW: AppWindow.controlW, settings: s)
+        let w = AppWindow(name: "Pixlift", rows: Action.allCases.map { a in Row(id: a.id, label: a.label, defaultShortcut: a.defaultShortcut) { } }, extra: extra, showAtLaunch: false)
         w.panel.appearance = NSAppearance(named: args[3] == "dark" ? .darkAqua : .aqua)
-        if args.count > 4 { w.startRecording(0) }
+        if args.contains("recording") { w.startRecording(0) }
         w.refresh()
+        // "show": the real window on screen in the chosen theme, for a screenshot of it (run in a session of its own).
+        if args.contains("show") {
+            w.panel.center()
+            w.panel.orderFrontRegardless()
+            w.panel.makeKey()
+            NSApp.activate(ignoringOtherApps: true)
+            app.run()
+        }
         let v = w.panel.contentView!
         v.layoutSubtreeIfNeeded()
         let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds)!
@@ -250,7 +392,21 @@ case "render":
         for (i, l) in w.labels.enumerated() where l.attributedStringValue.size().width + 4 > l.frame.width { print("CLIPPED label", i, l.stringValue) }
         for (i, l) in w.notes.enumerated() where l.attributedStringValue.size().width > l.frame.width { print("CLIPPED note", i, l.stringValue) }
         for b in w.buttons where b.attributedTitle.size().width + 24 > b.frame.width { print("CLIPPED button", b.title) }
+        for l in extra.labels where l.attributedStringValue.size().width + 4 > l.frame.width { print("CLIPPED label", l.stringValue) }
+        // Every pop-up item, as the closed pop-up would show it once chosen (the picked folder may truncate, by design).
+        for p in extra.popups.values {
+            let chosen = p.selectedItem
+            for item in p.itemArray where !item.isSeparatorItem && ![2, 3].contains(item.tag) {
+                p.select(item)   // the cell's title rect is the one of the shown item
+                let need = NSAttributedString(string: item.title, attributes: [.font: p.font as Any]).size().width
+                let room = p.cell!.titleRect(forBounds: p.bounds).width
+                if need > room { print("CLIPPED popup item", item.title, Int(need), ">", Int(room)) }
+            }
+            p.select(chosen)
+        }
+        for v in extra.subviews { for o in extra.subviews where o !== v && v.frame.intersects(o.frame) { print("OVERLAP", v, o) } }
         print("rendered", Int(v.bounds.width), "x", Int(v.bounds.height))
+        dropDefaults()
         exit(0)
     }
 

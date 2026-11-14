@@ -29,3 +29,12 @@
 "The screenshot was not saved" = "снимок не сохранён";
 "The recording did not start" = "запись не началась";
 "The recording was not saved" = "запись не сохранена";
+"Screenshot" = "Снимок экрана";
+"Screen Recording" = "Запись экрана";
+"Save to" = "Место сохранения";
+"Desktop" = "Рабочий стол";
+"Other Location…" = "Другое расположение…";
+"Clipboard" = "Буфер обмена";
+"Choose" = "Выбрать";
+"The folder “%@” can’t be found." = "Папка «%@» не найдена.";
+"Saved to the Desktop:" = "Сохранено на Рабочем столе:";

@@ -1,4 +1,4 @@
-// What each key does, the permissions, and where every capture goes.
+// What each key does, the permissions, and where every capture goes (the settings: destinations.swift).
 // The app's name lives in one place: the build script (Info.plist); the code reads it from the bundle.
 
 import AppKit
@@ -32,6 +32,9 @@ enum Action: CaseIterable {
 
 @MainActor final class App: NSObject, NSApplicationDelegate {
     let clipboard: Clipboard
+    let destinations = Destinations()
+    let clipboardFiles: ClipboardFiles
+    var sweeper: Timer?
     let engine = Engine()
     let sampler = NSColorSampler()
     var samplerSession = 0
@@ -41,13 +44,21 @@ enum Action: CaseIterable {
     var starting = false
     var window: AppWindow?
 
-    init(pasteboard: NSPasteboard) { clipboard = Clipboard(pasteboard) }
+    init(pasteboard: NSPasteboard) {
+        clipboard = Clipboard(pasteboard)
+        clipboardFiles = ClipboardFiles(pasteboard: pasteboard)
+    }
 
     func applicationDidFinishLaunching(_ n: Notification) {
         _ = Updates.shared   // starts the daily check (updates.swift)
+        destinations.migrate(macOS: Destinations.macOSPrefs())   // before the window marks the app as launched
+        clipboardFiles.sweep()
+        sweeper = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.clipboardFiles.sweep() }
+        }
         window = AppWindow(name: appName, rows: Action.allCases.map { a in
             Row(id: a.id, label: a.label, defaultShortcut: a.defaultShortcut) { [weak self] in self?.run(a) }
-        })
+        }, extra: DestinationsView(width: AppWindow.W, margin: AppWindow.M, controlW: AppWindow.controlW, settings: destinations))
         // Vision compiles its model per app on first use (~30 s): done at launch, as OCR.app does, so the
         // first ⌥⌘6 is quick. It reads only its own test card, no screen.
         Task {
@@ -139,14 +150,37 @@ enum Action: CaseIterable {
             if kind != .screen { interactive = false }
             guard taken else { return }   // Esc
             do {
-                let file = try deliver(temp, date: Date(), ext: "png")
-                clipboard.put(file, picture: true)
+                try place(temp, .shot, date: Date(), ext: "png")
                 if recorder == nil { AudioServicesPlaySystemSound(shutter) }
             } catch {
                 try? FileManager.default.removeItem(at: temp)
                 report("\(appName): \(L("The screenshot was not saved"))", "\(error)")
             }
         }
+    }
+
+    /// Saves and copies a finished capture as its kind's settings say. A screenshot that is only copied goes as the
+    /// picture and its file is deleted; a recording that is only copied stays a file in the clipboard folder
+    /// (destinations.swift). A picked folder that is gone gets the Desktop instead, and the person is told.
+    func place(_ temp: URL, _ kind: Kind, date: Date, ext: String) throws {
+        let copy = destinations.get(kind).clipboard
+        if let (folder, missing) = destinations.folder(kind) {
+            let file = try deliver(temp, to: folder, date: date, ext: ext)
+            if copy { clipboard.put(file, picture: kind == .shot) }
+            if let missing {
+                report("\(appName): " + String(format: L("The folder “%@” can’t be found."), FileManager.default.displayName(atPath: missing)),
+                       "\(missing)\n\(L("Saved to the Desktop:")) \(file.path)")
+            }
+        } else if kind == .shot {
+            let data = try Data(contentsOf: temp)
+            clipboard.put(picture: data)
+            try? FileManager.default.removeItem(at: temp)
+        } else {
+            let file = try clipboardFiles.keep(temp, date: date, ext: ext)
+            clipboard.put(file, picture: false)
+            clipboardFiles.placed(file)
+        }
+        clipboardFiles.sweep()
     }
 
     // MARK: recording
@@ -181,8 +215,7 @@ enum Action: CaseIterable {
         let started = recordingStarted   // a new recording may start during the await below and set its own
         do {
             try await r.stop()
-            let file = try deliver(r.file, date: started, ext: "mp4")
-            clipboard.put(file, picture: false)
+            try place(r.file, .video, date: started, ext: "mp4")
         } catch {
             try? FileManager.default.removeItem(at: r.file)
             report("\(appName): \(L("The recording was not saved"))", "\(error)")
