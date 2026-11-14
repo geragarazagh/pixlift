@@ -4,7 +4,7 @@ English · [Українська](README_UA.md) · [Русский](README_RU.md
 
 # Pixlift: screenshots, screen recording, text and color for Mac
 
-Free, open source app for macOS that takes screenshots and records the screen, one keyboard shortcut for each: a selected area, a selected window, the whole screen, a recording of the whole screen with its sound. Every capture is saved to the Desktop and copied to the clipboard at once, so it can be pasted right away and is still there later. Two more shortcuts copy the text of any area of the screen and the color of any pixel.
+Free, open source app for macOS that takes screenshots and records the screen, one keyboard shortcut for each: a selected area, a selected window, the whole screen, a recording of the whole screen with its sound. Each capture is saved to the Desktop or a chosen folder, copied to the clipboard, or both, as set in its window for screenshots and for recordings. Two more shortcuts copy the text of any area of the screen and the color of any pixel.
 
 Copy Text is the recognition of [OCR](https://github.com/geragarazagh/ocr) and Copy Color the picker of [#HEX](https://github.com/geragarazagh/hex): the author’s single-function apps, which stay available on their own.
 
@@ -12,7 +12,7 @@ Apple silicon, macOS 13 or later. Interface in English, Ukrainian and Russian. S
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/scene.webp"><img src="docs/scene-light.webp" alt="Preview with the Wright brothers’ telegram of 17 December 1903; beside it a note holding a capture of the whole screen, which holds the same screen again, smaller each time; on the Desktop five captures named by their time, 2025-12-17 17-25-00 to 17-25-59"></picture>
 
-The Wright brothers’ telegram of 17 December 1903 in Preview. Option-Command-7 took an area of it, and the note got the capture from the clipboard; then Option-Command-9 took the whole screen four times, each pasted over the last. Every capture lands on the Desktop, named by the time it was taken.
+The Wright brothers’ telegram of 17 December 1903 in Preview. Option-Command-7 took an area of it, and the note got the capture from the clipboard; then Option-Command-9 took the whole screen four times, each pasted over the last. Here every capture is also saved to the Desktop, named by the time it was taken.
 
 ## Install
 
@@ -33,29 +33,32 @@ brew install geragarazagh/tap/pixlift
 - Option-Command-6: Copy Text. Drag over an area, and its text is on the clipboard.
 - Option-Command-5: Copy Color. A click on any pixel copies its HEX code, for example `#EFEFEF`.
 
-Screenshots and recordings are saved to the Desktop as `2026-11-14 05-47-12.png` and `2026-11-14 05-47-12.mp4` and copied to the clipboard; each new capture replaces the last one there.
+Where a capture goes is set in the window, for screenshots and for recordings apart, in the words of the Screenshot app of macOS: Save to the Desktop, another folder (Other Location…) or None, and Clipboard on or off. One of the two always stays on. Files are named by time, `2026-11-14 05-47-12.png` and `2026-11-14 05-47-12.mp4`; on the clipboard each new capture replaces the last one.
 
-The window has Check for Updates, the six shortcuts, Open at Login and Quit. Opening the app shows its window. Closing the window leaves the shortcuts working, with nothing in the Dock or the menu bar.
+At first the settings follow the screenshots of macOS: saved where macOS saves them (the Desktop, unless another place is chosen in its Screenshot app), clipboard off. Updated from 0.1, Pixlift keeps saving to the Desktop and copying, as before.
+
+The window has Check for Updates, the six shortcuts, where screenshots and recordings go, Open at Login and Quit. Opening the app shows its window. Closing the window leaves the shortcuts working, with nothing in the Dock or the menu bar.
 
 ## For advanced users and language models
 
-The screenshots of macOS (Shift-Command-3, 4 and 5) go either to a file or to the clipboard, one at a time, and a recording takes several clicks. Pixlift gives each kind of capture one shortcut and does both: the file on the Desktop and the same capture on the clipboard. It has no capture engine of its own: screenshots are made by macOS’s own `screencapture`, recordings by ScreenCaptureKit, text by Apple’s Vision, color by the color sampler of macOS. Everything runs on the Mac, offline. No editor, no history, no cloud, no logs.
+The screenshots of macOS (Shift-Command-3, 4 and 5) go either to a file or to the clipboard, one at a time, and a recording takes several clicks. Pixlift gives each kind of capture one shortcut and can do both: the file in a folder and the same capture on the clipboard. It has no capture engine of its own: screenshots are made by macOS’s own `screencapture`, recordings by ScreenCaptureKit, text by Apple’s Vision, color by the color sampler of macOS. Everything runs on the Mac, offline. No editor, no history, no cloud, no logs.
 
 ### What it does
 
 - Six system-wide shortcuts, Option-Command-7, 8, 9, 0, 6 and 5 by default, each changed in the window. The first four are named as macOS names the same actions.
-- A file on the Desktop and the same capture on the clipboard, every time: one capture or twenty in a row. A file name already taken gets ` (2)`, ` (3)` and so on.
-- The clipboard holds one item: the file and, for a screenshot, the picture itself as PNG. An app that takes files gets the file with its name, an app that takes pictures gets the picture. A recording is copied as its file.
+- Two settings for screenshots and two for recordings: Save to (the Desktop, a folder chosen with Other Location…, or None) and Clipboard. A choice that would turn both off is greyed out, so a capture always goes somewhere. A file name already taken gets ` (2)`, ` (3)` and so on.
+- The first launch reads the place of macOS’s own screenshots from `com.apple.screencapture` (`location`, and on macOS 27 `location-screenshot` and `location-screenrecording`); with none set it is the Desktop. Screenshots that macOS sends to its clipboard start as copied, not saved. After that the settings are Pixlift’s own. A Mac updated from 0.1 starts with both on and the Desktop.
+- The clipboard holds one item: the file and, for a screenshot, the picture itself as PNG. An app that takes files gets the file with its name, an app that takes pictures gets the picture. A recording is copied as its file. A screenshot that is not saved goes as the picture alone. A recording that is not saved is kept in `~/Library/Caches/com.geragaraza.pixlift/Clipboard`, because a recording is pasted as a file; it is deleted once it is off the clipboard and more than an hour old.
 - Recording: the whole screen under the pointer, with the pointer, the Mac’s sound and the microphone. Nothing counts down, and Pixlift draws nothing over the screen or in the menu bar.
 - Nothing in the Dock or the menu bar. Open at Login stays off until it is turned on.
 
 ### How it works
 
-- Screenshots are taken by `/usr/sbin/screencapture`, the program behind the screenshots of macOS itself, with its crosshair and its window picker. The PNG is what macOS’s own screenshot would be: the display’s own pixels, its color profile, 144 dpi on a Retina display. Pixlift then names the file and puts it on the Desktop and the clipboard.
+- Screenshots are taken by `/usr/sbin/screencapture`, the program behind the screenshots of macOS itself, with its crosshair and its window picker. The PNG is what macOS’s own screenshot would be: the display’s own pixels, its color profile, 144 dpi on a Retina display. Pixlift then names the file and saves it, copies it, or both, as set.
 - The shutter sound is the one of macOS and follows its Play user interface sound effects setting; it is silent while a recording runs.
 - Recording runs on ScreenCaptureKit: the picture and the Mac’s sound from it, the microphone through AVFoundation, mixed into one sound track, because players and messengers play only the first track. The app’s own sounds are left out.
 - The MP4 is H.264 (High profile) at the display’s own resolution, with a variable frame rate up to the display’s refresh rate: frames come only when the screen changes, so a still screen costs almost nothing. Colors bt709, sound AAC, 48 kHz stereo. The bit rate is about twice the one macOS uses for its own recordings, about 20 Mbit/s for a 3456 x 2234 display.
-- A recording is written to a temporary file and moved to the Desktop when it stops. Quitting the app during a recording finishes the file first.
+- A recording is written to a temporary file and moved to its place when it stops. Quitting the app during a recording finishes the file first.
 - Copy Text is the engine of [OCR](https://github.com/geragarazagh/ocr): the area is read by Apple’s Vision on the Mac, in every language Vision has on the installed macOS; an area with no text in it gives what its QR code or other barcode encodes.
 - Copy Color is the picker of [#HEX](https://github.com/geragarazagh/hex): the loupe is `NSColorSampler`, the color is converted to sRGB and copied in upper case as `#RRGGBB`.
 - The shortcuts are Carbon hot keys (`RegisterEventHotKey`), which need no Accessibility. They are stored as physical keys, so they work in every keyboard layout.
@@ -73,7 +76,7 @@ Since macOS 15, macOS itself asks from time to time whether an app may go on rec
 
 #### Can the files go to another folder, or only to the clipboard?
 
-No. Always the Desktop and the clipboard, both.
+Yes, either, set apart for screenshots and recordings: Save to the Desktop, any folder (Other Location…) or None, and Clipboard on or off. One of the two always stays on. A chosen folder that is gone, such as a disk that was unplugged, gets the capture on the Desktop instead, with an alert that says so.
 
 #### Does it work without internet?
 
@@ -91,7 +94,7 @@ The feed and the disk image are signed with an EdDSA key, and Sparkle installs o
 
 ### Settings and removal
 
-It stores the shortcuts, whether it has been opened and has asked for screen access before, and the time of the last update check in the defaults of `com.geragaraza.pixlift`, and Vision’s compiled model in `~/Library/Caches/com.geragaraza.pixlift`. The captures themselves are the files on the Desktop.
+It stores the shortcuts, where captures go, whether it has been opened and has asked for screen access before, and the time of the last update check in the defaults of `com.geragaraza.pixlift`, and Vision’s compiled model and a recording that is only on the clipboard in `~/Library/Caches/com.geragaraza.pixlift`. The captures themselves are the files where they were saved.
 
 To remove Pixlift: Quit in its window, move `Pixlift.app` to the Trash, delete that cache folder and clear its settings with this command:
 
@@ -117,14 +120,14 @@ This command prints the text of pictures instead of copying it:
 
 ### Details
 
-- Version: 0.1.
+- Version: 0.2.
 - Bundle ID: `com.geragaraza.pixlift`.
 - Download: `Pixlift.dmg`, 1.5 MB.
 - Requires: Apple silicon, macOS 13 or later.
 - Permissions: Screen & System Audio Recording, Microphone. Network: only the update check.
 - Signed with a Developer ID and notarized by Apple.
 - Interface: English, Ukrainian, Russian, from the language of macOS.
-- Code: Swift with AppKit, ScreenCaptureKit, AVFoundation and Vision, about 1,700 lines, and the Sparkle framework for updates.
+- Code: Swift with AppKit, ScreenCaptureKit, AVFoundation and Vision, about 2,100 lines, and the Sparkle framework for updates.
 - License: MIT. Sparkle is MIT too; its license comes with the app and is in `THIRD-PARTY-LICENSES.md`.
 
 ### Build
