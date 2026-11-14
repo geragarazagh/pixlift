@@ -1,0 +1,13 @@
+#!/bin/zsh
+# Off-screen tests: ./test <picture.png> builds the tests from the app's sources and runs names, clipboard
+# (a private pasteboard) and the audio mix. Kept: ./test leaves the binary at $TMPDIR/pixlift-tests for the
+# recording and key tests, run by hand: pixlift-tests record 8 out.mp4; pixlift-tests keys
+set -e
+cd "${0:A:h}"
+t=$TMPDIR/pixlift-tests
+swiftc -O -target arm64-apple-macos13.0 -o $t tests/main.swift app.swift capture.swift record.swift ocr.swift window.swift
+tmp=$(mktemp -d); trap 'rm -rf $tmp' EXIT
+$t names $tmp
+$t clipboard $1
+$t mix $tmp/mix.wav
+echo Done
