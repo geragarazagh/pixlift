@@ -181,6 +181,79 @@ case "sweep":
     pb.releaseGlobally()
     dropDefaults()
 
+case "fallback":
+    // args: a scratch folder, a picture. A folder that refuses the file (made read-only: what permission denied, a full
+    // disk or a read-only volume look like to moveItem) falls back to the Desktop, then to the clipboard; nothing is lost.
+    MainActor.assumeIsolated {
+        let root = URL(fileURLWithPath: args[2]).appendingPathComponent("fallback")
+        let fm = FileManager.default
+        let picture = try! Data(contentsOf: URL(fileURLWithPath: args[3]))
+        func folder(_ name: String, writable: Bool) -> URL {
+            let u = root.appendingPathComponent(name)
+            try! fm.createDirectory(at: u, withIntermediateDirectories: true)
+            try! fm.setAttributes([.posixPermissions: writable ? 0o755 : 0o555], ofItemAtPath: u.path)
+            return u
+        }
+        let picked = folder("Picked", writable: true), locked = folder("Locked", writable: false)
+        let desk = folder("Desktop", writable: true), lockedDesk = folder("LockedDesktop", writable: false)
+        let pb = NSPasteboard(name: .init("pixlift-test-fallback-\(getpid())"))
+        let clip = Clipboard(pb)
+        let d = freshDefaults(); let s = Destinations(d)
+        let files = ClipboardFiles(folder: root.appendingPathComponent("Clipboard"), defaults: d, pasteboard: pb)
+        func temp(_ ext: String) -> URL { let u = root.appendingPathComponent(UUID().uuidString + "." + ext); fm.createFile(atPath: u.path, contents: picture); return u }
+        func marker() { pb.clearContents(); pb.setString("marker", forType: .string) }
+        func contents(_ u: URL) -> [String] { ((try? fm.contentsOfDirectory(atPath: u.path)) ?? []).filter { !$0.hasPrefix(".") }.sorted() }
+        func fileURL() -> String? { (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?.first?.path }
+        var date = Date()
+        func run(_ kind: Kind, _ ext: String, _ dest: Destination, desk: URL) -> (Delivery?, URL) {
+            s.set(kind, dest); marker(); date += 1
+            let t = temp(ext)
+            return ((try? deliverCapture(t, kind, date: date, ext: ext, settings: s, desk: desk, clipboard: clip, files: files)), t)
+        }
+
+        // A writable picked folder: saved there, nothing to say.
+        var (r, t) = run(.shot, "png", Destination(place: .folder, folder: picked.path, clipboard: false), desk: desk)
+        check(r?.problem == nil && r?.file?.deletingLastPathComponent().path == picked.path && pb.string(forType: .string) == "marker", "writable folder: saved there, clipboard untouched")
+
+        // The picked folder refuses: the Desktop gets it, the alert names the folder, the clipboard stays as set (off).
+        (r, t) = run(.shot, "png", Destination(place: .folder, folder: locked.path, clipboard: false), desk: desk)
+        check(r?.file?.deletingLastPathComponent().path == desk.path && fm.fileExists(atPath: r!.file!.path) && !fm.fileExists(atPath: t.path),
+              "unwritable folder: saved to the Desktop (\(r?.file?.lastPathComponent ?? "-"))")
+        check(r?.problem?.title == String(format: L("Couldn’t save to “%@”."), "Locked") && r!.problem!.details.contains(locked.path) && r!.problem!.details.contains(L("Saved to the Desktop:")),
+              "unwritable folder: alert «\(r?.problem?.title ?? "-")»")
+        check(pb.string(forType: .string) == "marker" && contents(locked).isEmpty, "unwritable folder, clipboard off: clipboard untouched, nothing in the folder")
+        // Same with the clipboard on: the Desktop file is copied.
+        (r, t) = run(.video, "mp4", Destination(place: .folder, folder: locked.path, clipboard: true), desk: desk)
+        check(r?.file?.deletingLastPathComponent().path == desk.path && fileURL() == r?.file?.path && r?.problem != nil, "unwritable folder, recording, clipboard on: Desktop file on the clipboard")
+
+        // Folder and Desktop both refuse, clipboard off: a screenshot goes to the clipboard as the picture, and says so.
+        let before = contents(lockedDesk)
+        (r, t) = run(.shot, "png", Destination(place: .folder, folder: locked.path, clipboard: false), desk: lockedDesk)
+        check(r != nil && r!.copied && pb.data(forType: .png) == picture && fileURL() == nil && !fm.fileExists(atPath: t.path) && contents(lockedDesk) == before,
+              "folder and Desktop refuse, screenshot: the picture on the clipboard, temp removed")
+        check(r?.problem?.title == L("The screenshot was not saved") && r!.problem!.details.contains(L("Not saved, but copied to the clipboard.")) && r!.problem!.details.contains(locked.path) && r!.problem!.details.contains(lockedDesk.path),
+              "folder and Desktop refuse: alert names both and says it was copied")
+        // A recording: kept in the clipboard folder and copied as that file.
+        (r, t) = run(.video, "mp4", Destination(place: .folder, folder: locked.path, clipboard: false), desk: lockedDesk)
+        check(r?.file?.deletingLastPathComponent().path == files.folder.path && fileURL() == r?.file?.path && r?.problem?.title == L("The recording was not saved"),
+              "folder and Desktop refuse, recording: the file in the clipboard folder, on the clipboard")
+        // The Desktop itself chosen and refusing, clipboard on: copied as the picture, one failure named.
+        (r, t) = run(.shot, "png", Destination(place: .desktop, clipboard: true), desk: lockedDesk)
+        check(r?.copied == true && pb.data(forType: .png) == picture && r?.problem?.details.components(separatedBy: "\n").count == 2, "Desktop chosen and refusing: copied, alert")
+        // A missing folder and a refusing Desktop: the clipboard, and both reasons.
+        let gone = root.appendingPathComponent("Gone").path
+        (r, t) = run(.shot, "png", Destination(place: .folder, folder: gone, clipboard: false), desk: lockedDesk)
+        check(r?.copied == true && r!.problem!.details.contains(gone) && r!.problem!.details.contains(lockedDesk.path), "missing folder and refusing Desktop: copied, both named")
+        // A missing folder with a working Desktop: the old alert.
+        (r, t) = run(.shot, "png", Destination(place: .folder, folder: gone, clipboard: false), desk: desk)
+        check(r?.file?.deletingLastPathComponent().path == desk.path && r?.problem?.title == String(format: L("The folder “%@” can’t be found."), "Gone"), "missing folder: Desktop, «can’t be found»")
+
+        for u in [locked, lockedDesk] { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: u.path) }
+        try? fm.removeItem(at: root)
+        pb.releaseGlobally()
+        dropDefaults()
+    }
+
 case "mix":
     // Two synthetic sources with jitter and a dropout: 440 Hz as the Mac's sound (stereo, 48 kHz, float),
     // 1000 Hz as the microphone (mono, 44.1 kHz, int16, through the converter). Output: args[2] (wav).

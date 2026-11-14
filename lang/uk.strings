@@ -38,3 +38,6 @@
 "Choose" = "Вибрати";
 "The folder “%@” can’t be found." = "Теку «%@» не знайдено.";
 "Saved to the Desktop:" = "Збережено на робочий стіл:";
+"Couldn’t save to “%@”." = "Не вдалося зберегти в «%@».";
+"not found" = "не знайдено";
+"Not saved, but copied to the clipboard." = "Не збережено, але скопійовано в буфер обміну.";

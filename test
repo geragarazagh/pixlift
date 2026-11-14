@@ -15,6 +15,7 @@ $t names $tmp
 $t clipboard $1
 $t destinations $tmp
 $t sweep $tmp
+$t fallback $tmp $1
 $t mix $tmp/mix.wav
 $t qr
 echo Done

@@ -101,16 +101,83 @@ final class Destinations {
     /// The folder a capture of this kind is saved to, nil when it is not saved. A picked folder that is gone (a disk
     /// unplugged, the folder deleted) gives the Desktop and its own path as `missing`, so the capture is kept and the
     /// person is told.
-    func folder(_ k: Kind) -> (url: URL, missing: String?)? {
+    func folder(_ k: Kind, desk: URL = desktop) -> (url: URL, missing: String?)? {
         let v = get(k)
         switch v.place {
         case .notSaved: return nil
-        case .desktop: return (desktop, nil)
+        case .desktop: return (desk, nil)
         case .folder:
-            guard let f = v.folder, isFolder(f) else { return (desktop, v.folder) }
+            guard let f = v.folder, isFolder(f) else { return (desk, v.folder) }
             return (URL(fileURLWithPath: f, isDirectory: true), nil)
         }
     }
+}
+
+// MARK: delivering a finished capture
+
+/// What happened to a capture, and what the person must be told (nil when it went where the settings say).
+struct Delivery {
+    var file: URL?                                   // the saved file, or the clipboard-only recording
+    var copied = false
+    var problem: (title: String, details: String)?
+}
+
+/// Saves and copies a finished capture as its kind's settings say, and never loses it (coordinator's rule 2026-11-14):
+/// a picked folder that is gone or refuses the file (no permission, disk full, read-only volume) gets the Desktop
+/// instead; if the Desktop refuses it too, the capture goes to the clipboard, whatever the Clipboard switch says, and
+/// the alert says where it went. A screenshot that is only copied goes as the picture and its file is deleted; a
+/// recording that is only copied stays a file in the clipboard folder (ClipboardFiles). Throws only when even that fails.
+func deliverCapture(_ temp: URL, _ kind: Kind, date: Date, ext: String, settings: Destinations, desk: URL = desktop,
+                               clipboard: Clipboard, files: ClipboardFiles) throws -> Delivery {
+    var out = Delivery()
+    let copy = settings.get(kind).clipboard
+    let notSaved = kind == .shot ? L("The screenshot was not saved") : L("The recording was not saved")
+
+    func toClipboardOnly() throws {
+        if kind == .shot {
+            clipboard.put(picture: try Data(contentsOf: temp))
+            try? FileManager.default.removeItem(at: temp)
+        } else {
+            let file = try files.keep(temp, date: date, ext: ext)
+            clipboard.put(file, picture: false)
+            files.placed(file)
+            out.file = file
+        }
+        out.copied = true
+    }
+
+    guard let (target, missing) = settings.folder(kind, desk: desk) else {
+        try toClipboardOnly()
+        return out
+    }
+    var failures: [String] = []
+    if let missing { failures.append("\(missing): \(L("not found"))") }
+    var saved: URL?
+    do {
+        saved = try deliver(temp, to: target, date: date, ext: ext)
+    } catch {
+        failures.append("\(target.path): \(error.localizedDescription)")
+        if target.standardizedFileURL.path != desk.standardizedFileURL.path {
+            do { saved = try deliver(temp, to: desk, date: date, ext: ext) } catch {
+                failures.append("\(desk.path): \(error.localizedDescription)")
+            }
+        }
+    }
+    let wanted = missing ?? (target.standardizedFileURL.path == desk.standardizedFileURL.path ? nil : target.path)
+    let name = FileManager.default.displayName(atPath: wanted ?? desk.path)
+    if let file = saved {
+        out.file = file
+        if copy { clipboard.put(file, picture: kind == .shot); out.copied = true }
+        if !failures.isEmpty {
+            let title = missing != nil ? String(format: L("The folder “%@” can’t be found."), name) : String(format: L("Couldn’t save to “%@”."), name)
+            out.problem = (title, (failures + ["\(L("Saved to the Desktop:")) \(file.path)"]).joined(separator: "\n"))
+        }
+        return out
+    }
+    // Neither the folder nor the Desktop took it: the clipboard keeps it.
+    try toClipboardOnly()
+    out.problem = (notSaved, (failures + [L("Not saved, but copied to the clipboard.")]).joined(separator: "\n"))
+    return out
 }
 
 // MARK: recordings that live only on the clipboard

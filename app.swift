@@ -159,28 +159,12 @@ enum Action: CaseIterable {
         }
     }
 
-    /// Saves and copies a finished capture as its kind's settings say. A screenshot that is only copied goes as the
-    /// picture and its file is deleted; a recording that is only copied stays a file in the clipboard folder
-    /// (destinations.swift). A picked folder that is gone gets the Desktop instead, and the person is told.
+    /// Saves and copies a finished capture as its kind's settings say (deliverCapture in destinations.swift: a folder
+    /// that is gone or refuses the file falls back to the Desktop, then to the clipboard) and says what went wrong.
     func place(_ temp: URL, _ kind: Kind, date: Date, ext: String) throws {
-        let copy = destinations.get(kind).clipboard
-        if let (folder, missing) = destinations.folder(kind) {
-            let file = try deliver(temp, to: folder, date: date, ext: ext)
-            if copy { clipboard.put(file, picture: kind == .shot) }
-            if let missing {
-                report("\(appName): " + String(format: L("The folder “%@” can’t be found."), FileManager.default.displayName(atPath: missing)),
-                       "\(missing)\n\(L("Saved to the Desktop:")) \(file.path)")
-            }
-        } else if kind == .shot {
-            let data = try Data(contentsOf: temp)
-            clipboard.put(picture: data)
-            try? FileManager.default.removeItem(at: temp)
-        } else {
-            let file = try clipboardFiles.keep(temp, date: date, ext: ext)
-            clipboard.put(file, picture: false)
-            clipboardFiles.placed(file)
-        }
+        let d = try deliverCapture(temp, kind, date: date, ext: ext, settings: destinations, clipboard: clipboard, files: clipboardFiles)
         clipboardFiles.sweep()
+        if let p = d.problem { report("\(appName): \(p.title)", p.details) }
     }
 
     // MARK: recording
