@@ -1,21 +1,47 @@
 #!/bin/zsh
 # Builds <Name>.app in this folder. Needs Xcode 26 or later in /Applications (actool and Icon Composer for the icon).
+# Same recipe as #HEX, OCR, STT, HoldQ, Retyper: Sparkle for updates, Icon Composer for the icon.
 # The app's name is set here only; the code reads it from the bundle.
 set -e
 cd "${0:A:h}"
+# The version changes per release, not per build.
 name=Pixlift version=0.1 min=13.0
-id=com.geragaraza.${(L)name} app=$name.app
+id=com.geragaraza.${(L)name} app=$name.app repo=https://github.com/geragarazagh/${(L)name}
 tmp=$(mktemp -d); trap 'rm -rf $tmp' EXIT
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
+# Updates: Sparkle, from its release, checked against a pinned checksum. Only what a non-sandboxed app
+# runs goes into the bundle: no XPC services (they serve sandboxed apps), no headers, Apple silicon only.
+sparkle=2.10.1 sparkle_sha=1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
+if [ ! -d vendor/Sparkle.framework ]; then
+  mkdir -p vendor $tmp/sparkle
+  curl -fsSL -o $tmp/sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/$sparkle/Sparkle-$sparkle.tar.xz
+  [ "$(shasum -a 256 $tmp/sparkle.tar.xz | cut -d' ' -f1)" = $sparkle_sha ] || { echo "Sparkle checksum mismatch"; exit 1; }
+  tar -xf $tmp/sparkle.tar.xz -C $tmp/sparkle Sparkle.framework
+  ditto $tmp/sparkle/Sparkle.framework vendor/Sparkle.framework
+fi
+# A vendor copy left from an older pin would ship silently: the version must match.
+[ "$(defaults read $PWD/vendor/Sparkle.framework/Resources/Info.plist CFBundleShortVersionString)" = $sparkle ] ||
+  { echo "vendor/Sparkle.framework is not $sparkle: delete vendor/ and build again"; exit 1; }
+mkdir -p "$app/Contents/Frameworks"
+sp=$app/Contents/Frameworks/Sparkle.framework
+ditto vendor/Sparkle.framework "$sp"
+rm -rf "$sp"/{XPCServices,Headers,PrivateHeaders,Modules} "$sp"/Versions/B/{XPCServices,Headers,PrivateHeaders,Modules}
+for b in Sparkle Autoupdate Updater.app/Contents/MacOS/Updater; do
+  lipo "$sp/Versions/B/$b" -thin arm64 -output $tmp/thin && cp $tmp/thin "$sp/Versions/B/$b"
+done
+
 # An explicit minimum: by default swiftc targets this Mac's macOS and every older system refuses the result.
 # 13: ScreenCaptureKit's system sound and Vision's Cyrillic both start there. Apple silicon only.
-swiftc -O -target arm64-apple-macos$min -o "$app/Contents/MacOS/$name" main.swift app.swift capture.swift record.swift ocr.swift window.swift
+swiftc -O -target arm64-apple-macos$min -F vendor -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
+  -o "$app/Contents/MacOS/$name" main.swift app.swift capture.swift record.swift ocr.swift window.swift updates.swift
 
 # App icon, Apple's way (apps.md, «Icons»): the picture from icon.swift, the plate is the system's own fill, compiled
 # by Xcode's actool into Assets.car (macOS 26+ switch it with the theme) and AppIcon.icns (Apple's light rendition, 13-15).
 # Glass, group shadow and translucency off: with Icon Composer's defaults the picture turns to glass.
+# icon.swift is the one file to swap for a new icon: the app, docs/icon.png and docs/icon-dark.png (the README's, Icon
+# Composer's own renders, 206 px on a 256 canvas as Apple's 824 of 1024) all come from it here.
 xc=/Applications/Xcode.app/Contents
 swiftc -O -o $tmp/icon icon.swift
 mkdir -p $tmp/AppIcon.icon/Assets
@@ -32,6 +58,13 @@ cat > $tmp/AppIcon.icon/icon.json <<'JSON'
 JSON
 DEVELOPER_DIR=$xc/Developer xcrun actool $tmp/AppIcon.icon --compile "$PWD/$app/Contents/Resources" --platform macosx \
   --minimum-deployment-target $min --app-icon AppIcon --output-partial-info-plist $tmp/icon.plist --target-device mac >/dev/null
+mkdir -p docs
+for r in Default Dark; do
+  "$xc/Applications/Icon Composer.app/Contents/Executables/ictool" $tmp/AppIcon.icon --export-image --output-file $tmp/$r.png \
+    --platform macOS --rendition $r --width 206 --height 206 --scale 1 >/dev/null
+  sips -p 256 256 $tmp/$r.png --out docs/icon${${r:#Default}:+-dark}.png >/dev/null
+done
+cp LICENSE THIRD-PARTY-LICENSES.md "$app/Contents/Resources/"   # Sparkle's MIT license travels with it
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -52,6 +85,13 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 <key>LSMinimumSystemVersion</key><string>$min</string>
 <key>NSMicrophoneUsageDescription</key><string>The microphone is recorded together with the screen.</string>
+<key>GitHubURL</key><string>$repo</string>
+<key>SUFeedURL</key><string>$repo/releases/latest/download/appcast.xml</string>
+<key>SUPublicEDKey</key><string>URlTczL/bZGecdDnRO3qHJgOYtOCe5FOPhKetm3FNqY=</string>
+<key>SURequireSignedFeed</key><true/>
+<key>SUVerifyUpdateBeforeExtraction</key><true/>
+<key>SUEnableAutomaticChecks</key><true/>
+<key>SUAllowsAutomaticUpdates</key><false/>
 </dict></plist>
 PLIST
 
@@ -78,8 +118,12 @@ PLIST
 
 # Hardened runtime; the one entitlement is the microphone (the screen needs none, its permission is TCC's).
 # A Developer ID keeps the Screen Recording grant across rebuilds (macOS keys it to the signature); ad hoc
-# unless SIGN_ID names a certificate.
+# unless SIGN_ID names a certificate. Sparkle's parts are signed inside out, without --deep (Sparkle's own
+# instructions). An ad hoc build has no team, so dyld refuses the framework under library validation; only that
+# build turns it off.
 /usr/libexec/PlistBuddy -c 'Add :com.apple.security.device.audio-input bool true' $tmp/e.plist >/dev/null
 sign=${SIGN_ID:--}; stamp=(); [ "$sign" = - ] || stamp=(--timestamp)
+if [ "$sign" = - ]; then /usr/libexec/PlistBuddy -c 'Add :com.apple.security.cs.disable-library-validation bool true' $tmp/e.plist >/dev/null; fi
+for p in "$sp/Versions/B/Autoupdate" "$sp/Versions/B/Updater.app" "$sp"; do codesign -f -s "$sign" $stamp --options runtime "$p"; done
 codesign -f -s "$sign" $stamp --options runtime --entitlements $tmp/e.plist --identifier $id "$app"
 echo Done

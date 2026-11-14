@@ -11,8 +11,10 @@
 "Already in use" = "Уже используется";
 "Conflicts with macOS" = "Конфликтует с macOS";
 "This shortcut can’t be used" = "Это сочетание недоступно";
-"Open at Login" = "Открывать при входе";
+"Open at Login" = "Открывать при входе";
 "Herman Harazha" = "Герман Гаража";
+"GitHub" = "Гитхаб";
+"Check for Updates…" = "Проверить наличие обновлений…";
 "Quit" = "Завершить";
 "Copy" = "Скопировать";
 "%@ needs screen access" = "%@ нужен доступ к экрану";

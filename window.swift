@@ -1,7 +1,7 @@
 // The app's whole interface: one small window of a fixed size. Opening the app shows it, closing it
 // leaves the hot keys working in the background, with nothing in the Dock or the menu bar.
-// The window.swift of #HEX and OCR, grown from one shortcut row to one per action; no update button
-// (this app makes no network calls). 400 pt wide, not 340: macOS's own Russian «Снимок выбранной области»
+// The window.swift of #HEX and OCR, grown from one shortcut row to one per action; Check for Updates… 32 pt
+// under the version as in theirs. 400 pt wide, not 340: macOS's own Russian «Снимок выбранной области»
 // and the button's «Натисніть скорочення» don't both fit a 340 pt row (measured on the rendered window).
 //
 // - Hot keys are Carbon RegisterEventHotKey: no Accessibility permission. Stored as virtual key codes,
@@ -172,7 +172,7 @@ final class AppIconView: NSImageView {
         failed = Array(repeating: false, count: rows.count)
         let top = Self.rowsY + CGFloat(rows.count - 1) * Self.rowH + 28
         // Non-activating: it takes the keys even when macOS declines to bring a background app forward.
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: Self.W, height: top + 152), styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: Self.W, height: top + 172), styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
 
         onHotKey = { [weak self] n in
@@ -238,11 +238,20 @@ final class AppIconView: NSImageView {
             return l
         }
 
-        let icon = AppIconView(frame: NSRect(x: (W - 64) / 2, y: top + 62, width: 64, height: 64))
+        let icon = AppIconView(frame: NSRect(x: (W - 64) / 2, y: top + 82, width: 64, height: 64))
         v.addSubview(icon)
-        _ = text(name, .boldSystemFont(ofSize: 15), .labelColor, NSRect(x: M, y: top + 36, width: W - 2 * M, height: 20), .center)
+        _ = text(name, .boldSystemFont(ofSize: 15), .labelColor, NSRect(x: M, y: top + 56, width: W - 2 * M, height: 20), .center)
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        _ = text(version, .systemFont(ofSize: 11), .secondaryLabelColor, NSRect(x: M, y: top + 20, width: W - 2 * M, height: 14), .center)
+        _ = text(version, .systemFont(ofSize: 11), .secondaryLabelColor, NSRect(x: M, y: top + 40, width: W - 2 * M, height: 14), .center)
+        // Updates.shared is made on the first click, not here: the off-screen tests build this window without Sparkle running.
+        let updates = NSButton(title: L("Check for Updates…"), target: self, action: #selector(checkForUpdates))
+        updates.bezelStyle = .rounded
+        updates.controlSize = .small
+        updates.font = .systemFont(ofSize: 11)
+        updates.refusesFirstResponder = true
+        updates.sizeToFit()
+        updates.frame.origin = NSPoint(x: (W - updates.frame.width) / 2, y: top + 8)
+        v.addSubview(updates)
 
         let buttonW: CGFloat = 150, labelW = W - 2 * M - buttonW - 8
         for (i, row) in rows.enumerated() {
@@ -267,15 +276,20 @@ final class AppIconView: NSImageView {
         loginSwitch.refusesFirstResponder = true
         v.addSubview(loginSwitch)
 
-        // No GitHub link before the app has a repository; the author's site stays.
-        let link = NSButton(title: L("Herman Harazha"), target: self, action: #selector(openLink(_:)))
-        link.isBordered = false
-        link.attributedTitle = NSAttributedString(string: L("Herman Harazha"), attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.linkColor])
-        link.toolTip = "https://geragaraza.com"
-        link.refusesFirstResponder = true
-        link.sizeToFit()
-        link.frame.origin = NSPoint(x: M, y: 20)
-        v.addSubview(link)
+        // The repository's address comes from Info.plist (GitHubURL, written by ./build from the app's name).
+        let github = Bundle.main.object(forInfoDictionaryKey: "GitHubURL") as? String ?? "https://github.com/geragarazagh"
+        var x = M
+        for (label, url) in [(L("Herman Harazha"), "https://geragaraza.com"), (L("GitHub"), github)] {
+            let b = NSButton(title: label, target: self, action: #selector(openLink(_:)))
+            b.isBordered = false
+            b.attributedTitle = NSAttributedString(string: label, attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.linkColor])
+            b.toolTip = url
+            b.refusesFirstResponder = true
+            b.sizeToFit()
+            b.frame.origin = NSPoint(x: x, y: 20)
+            v.addSubview(b)
+            x += b.frame.width + 12
+        }
         // A background app with no menu has no other way to be stopped.
         let quit = NSButton(title: L("Quit"), target: NSApp, action: #selector(NSApplication.terminate(_:)))
         quit.bezelStyle = .rounded
@@ -293,7 +307,10 @@ final class AppIconView: NSImageView {
         panel.orderFrontRegardless()
         panel.makeKey()
         NSApp.activate(ignoringOtherApps: true)
+        Updates.shared.appOpened()
     }
+
+    @objc func checkForUpdates() { Updates.shared.check() }
 
     func refresh() {
         for i in rows.indices { setNote(i, holder[i].map { String(format: L("Used by %@"), $0) } ?? (failed[i] ? L("This shortcut can’t be used") : "")) }

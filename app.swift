@@ -44,6 +44,7 @@ enum Action: CaseIterable {
     init(pasteboard: NSPasteboard) { clipboard = Clipboard(pasteboard) }
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        _ = Updates.shared   // starts the daily check (updates.swift)
         window = AppWindow(name: appName, rows: Action.allCases.map { a in
             Row(id: a.id, label: a.label, defaultShortcut: a.defaultShortcut) { [weak self] in self?.run(a) }
         })

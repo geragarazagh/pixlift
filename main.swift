@@ -1,6 +1,7 @@
 // Pixlift: screenshots, screen recording, text and colour from the screen, one key each.
 // Every capture lands on the Desktop and on the clipboard at once. Apple parts only: screencapture and
-// ScreenCaptureKit, AVFoundation, Vision, NSColorSampler, Carbon hot keys. No network, no logs.
+// ScreenCaptureKit, AVFoundation, Vision, NSColorSampler, Carbon hot keys; Sparkle for updates. No logs; the only
+// network call is Sparkle's daily update check (updates.swift), which asks before installing anything.
 //
 // Test without touching the real clipboard (quit the app first, a hot key has one owner):
 //   Pixlift.app/Contents/MacOS/Pixlift --pasteboard test

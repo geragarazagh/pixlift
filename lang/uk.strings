@@ -13,6 +13,8 @@
 "This shortcut can’t be used" = "Це скорочення недоступне";
 "Open at Login" = "Відкривати під час входу в систему";
 "Herman Harazha" = "Герман Гаража";
+"GitHub" = "Гітхаб";
+"Check for Updates…" = "Перевірити наявність оновлень…";
 "Quit" = "Завершити";
 "Copy" = "Скопіювати";
 "%@ needs screen access" = "%@ потрібен доступ до екрана";

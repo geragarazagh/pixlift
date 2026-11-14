@@ -5,7 +5,11 @@
 set -e
 cd "${0:A:h}"
 t=$TMPDIR/pixlift-tests
-swiftc -O -target arm64-apple-macos13.0 -o $t tests/main.swift app.swift capture.swift record.swift ocr.swift window.swift
+[ -d vendor/Sparkle.framework ] || { echo "Run ./build first (it fetches Sparkle)"; exit 1; }
+# Sparkle is linked because the window has Check for Updates; the tests never start it. Found beside the binary in an
+# app bundle (render) or in vendor/ here.
+swiftc -O -target arm64-apple-macos13.0 -F vendor -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
+  -Xlinker -rpath -Xlinker $PWD/vendor -o $t tests/main.swift app.swift capture.swift record.swift ocr.swift window.swift updates.swift
 tmp=$(mktemp -d); trap 'rm -rf $tmp' EXIT
 $t names $tmp
 $t clipboard $1
