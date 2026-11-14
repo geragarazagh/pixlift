@@ -12,7 +12,7 @@ Apple silicon, macOS 13 or later. Interface in English, Ukrainian and Russian. S
 
 ## Install
 
-**Mac** (Apple silicon, macOS 13 or later): download [`Pixlift.dmg`](https://github.com/geragarazagh/pixlift/releases/latest/download/Pixlift.dmg) (1.6 MB), open it and drag `Pixlift.app` to Applications. Later versions arrive through Check for Updates.
+**Mac** (Apple silicon, macOS 13 or later): download [`Pixlift.dmg`](https://github.com/geragarazagh/pixlift/releases/latest/download/Pixlift.dmg) (1.5 MB), open it and drag `Pixlift.app` to Applications. Later versions arrive through Check for Updates.
 
 Or with [Homebrew](https://brew.sh):
 
@@ -115,7 +115,7 @@ This command prints the text of pictures instead of copying it:
 
 - Version: 0.1.
 - Bundle ID: `com.geragaraza.pixlift`.
-- Download: `Pixlift.dmg`, 1.6 MB.
+- Download: `Pixlift.dmg`, 1.5 MB.
 - Requires: Apple silicon, macOS 13 or later.
 - Permissions: Screen & System Audio Recording, Microphone. Network: only the update check.
 - Signed with a Developer ID and notarized by Apple.
