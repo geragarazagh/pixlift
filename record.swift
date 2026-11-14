@@ -141,6 +141,9 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate, AVCaptureAudio
     var failure: Error?
     /// Called on the main queue when the stream stops by itself (the person stopped it from macOS's menu, a display went away).
     var stoppedBySystem: (() -> Void)?
+    /// Set on the main queue just before stoppedBySystem: a stop that came while start() was still finishing is seen by the
+    /// caller after start() returns, so the microphone does not go on alone (security pass 2026-11-14).
+    var streamEnded = false
 
     init(file: URL) throws {
         self.file = file
@@ -256,7 +259,7 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate, AVCaptureAudio
     // MARK: stop
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        DispatchQueue.main.async { self.stoppedBySystem?() }
+        DispatchQueue.main.async { self.streamEnded = true; self.stoppedBySystem?() }
     }
 
     /// Stops and finishes the file; it is complete when this returns.

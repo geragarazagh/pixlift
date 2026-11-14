@@ -166,6 +166,8 @@ enum Action: CaseIterable {
                 recordingStarted = Date()
                 try await r.start(display: displayUnderPointer().id, microphone: mic)
                 recorder = r
+                // macOS stopped the stream before start() returned: its stoppedBySystem found no recorder yet.
+                if r.streamEnded { await stopRecording() }
             } catch {
                 try? FileManager.default.removeItem(at: temp)
                 report("\(appName): \(L("The recording did not start"))", "\(error)")
@@ -176,9 +178,10 @@ enum Action: CaseIterable {
     func stopRecording() async {
         guard let r = recorder else { return }
         recorder = nil
+        let started = recordingStarted   // a new recording may start during the await below and set its own
         do {
             try await r.stop()
-            let file = try deliver(r.file, date: recordingStarted, ext: "mp4")
+            let file = try deliver(r.file, date: started, ext: "mp4")
             clipboard.put(file, picture: false)
         } catch {
             try? FileManager.default.removeItem(at: r.file)
