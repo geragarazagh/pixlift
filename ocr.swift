@@ -429,12 +429,15 @@ func clean(_ line: String) -> String {
     return out.trimmingCharacters(in: .whitespaces)
 }
 
+// Text the person can see wins: a barcode's payload is copied only when the area holds no text, so a faint QR code
+// inside a selected passage can't swap what they meant to copy (security pass 2026-11-14: a QR at 2 % contrast
+// decodes, and its payload used to replace the text).
 func textFor(_ image: CGImage) async throws -> String {
     async let codes = barcodes(image)
-    async let lines = recognizeBest(image)
+    let text = try await recognizeBest(image).map(clean).joined(separator: "\n")
     let qr = await codes
-    if !qr.isEmpty { return qr.joined(separator: "\n") }
-    return try await lines.map(clean).joined(separator: "\n")
+    if qr.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return text }
+    return qr.joined(separator: "\n")
 }
 
 // MARK: self-test and cache repair

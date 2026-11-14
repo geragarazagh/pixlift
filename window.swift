@@ -1,8 +1,10 @@
 // The app's whole interface: one small window of a fixed size. Opening the app shows it, closing it
 // leaves the hot keys working in the background, with nothing in the Dock or the menu bar.
 // The window.swift of #HEX and OCR, grown from one shortcut row to one per action; Check for Updates… 32 pt
-// under the version as in theirs. 400 pt wide, not 340: macOS's own Russian «Снимок выбранной области»
-// and the button's «Натисніть скорочення» don't both fit a 340 pt row (measured on the rendered window).
+// under the version as in theirs. 420 pt wide, not 340 (2026-11-14, measured with the real fonts and AppKit's own
+// sizeToFit): the longest label is ru «Снимок выбранной области» (179 pt), the widest key button ru «Нажмите
+// сочетание» (152 pt as AppKit sizes it), the longest switch label uk «Відкривати під час входу в систему» (226 pt).
+// 20 pt margins, 12 pt between a label and its control, key buttons 160 pt: 208 pt of label, 29 to spare.
 //
 // - Hot keys are Carbon RegisterEventHotKey: no Accessibility permission. Stored as virtual key codes,
 //   physical keys, so they work in every keyboard layout.
@@ -156,7 +158,7 @@ final class AppIconView: NSImageView {
     var notes: [NSTextField] = []  // a row's state, under its label
     let loginSwitch = NSSwitch()
 
-    private static let W: CGFloat = 400, M: CGFloat = 20, rowH: CGFloat = 34, rowsY: CGFloat = 96
+    private static let W: CGFloat = 420, M: CGFloat = 20, rowH: CGFloat = 34, rowsY: CGFloat = 96
 
     init(name: String, rows: [Row], showAtLaunch: Bool = true) {
         self.name = name
@@ -253,7 +255,7 @@ final class AppIconView: NSImageView {
         updates.frame.origin = NSPoint(x: (W - updates.frame.width) / 2, y: top + 8)
         v.addSubview(updates)
 
-        let buttonW: CGFloat = 150, labelW = W - 2 * M - buttonW - 8
+        let buttonW: CGFloat = 160, labelW = W - 2 * M - buttonW - 12
         for (i, row) in rows.enumerated() {
             let y = Self.rowsY + CGFloat(rows.count - 1 - i) * Self.rowH
             labels.append(text(row.label, .systemFont(ofSize: 13), .labelColor, NSRect(x: M, y: y + 5, width: labelW, height: 18), .left))
@@ -268,9 +270,9 @@ final class AppIconView: NSImageView {
             buttons.append(b)
         }
 
-        _ = text(L("Open at Login"), .systemFont(ofSize: 13), .labelColor, NSRect(x: M, y: 59, width: 236, height: 18), .left)
         loginSwitch.controlSize = .small
         loginSwitch.sizeToFit()
+        _ = text(L("Open at Login"), .systemFont(ofSize: 13), .labelColor, NSRect(x: M, y: 59, width: W - 2 * M - loginSwitch.frame.width - 12, height: 18), .left)
         loginSwitch.frame.origin = NSPoint(x: W - M - loginSwitch.frame.width + 5, y: 58)   // the switch draws 5 pt inside its frame
         loginSwitch.target = self; loginSwitch.action = #selector(loginChanged)
         loginSwitch.refusesFirstResponder = true

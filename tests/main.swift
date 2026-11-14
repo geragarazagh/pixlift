@@ -183,6 +183,44 @@ case "keys":
         app.run()
     }
 
+case "qr":
+    // Copy Text: visible text wins over a barcode in the same area; a barcode alone gives its payload. The QR is drawn
+    // at 2 % contrast (250 on 255), which Vision still decodes (security pass 2026-11-14).
+    let payload = "https://example.com/not-what-was-selected"
+    let gen = CIFilter(name: "CIQRCodeGenerator")!
+    gen.setValue(Data(payload.utf8), forKey: "inputMessage")
+    let qrImage = gen.outputImage!.transformed(by: CGAffineTransform(scaleX: 12, y: 12))
+    let ctx = CIContext()
+    func draw(text: String?, qrShade: CGFloat) -> CGImage {
+        let size = CGSize(width: 1400, height: 520)
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSColor.white.setFill(); NSRect(origin: .zero, size: size).fill()
+        if let text {
+            NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 40), .foregroundColor: NSColor.black])
+                .draw(in: NSRect(x: 40, y: 40, width: 900, height: 440))
+        }
+        // The QR's dark modules in a near-white grey, its light ones in white.
+        let tinted = qrImage.applyingFilter("CIFalseColor", parameters: [
+            "inputColor0": CIColor(red: qrShade, green: qrShade, blue: qrShade), "inputColor1": CIColor.white])
+        let cg = ctx.createCGImage(tinted, from: tinted.extent)!
+        NSGraphicsContext.current!.cgContext.draw(cg, in: CGRect(x: 980, y: 60, width: tinted.extent.width, height: tinted.extent.height))
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.cgImage!
+    }
+    let sem = DispatchSemaphore(value: 0)
+    Task.detached {
+        let mixed = (try? await textFor(draw(text: "Run this in Terminal:\nbrew install geragarazagh/tap/pixlift", qrShade: 250 / 255))) ?? ""
+        check(mixed.contains("brew install") && !mixed.contains("example.com"), "text beside a faint QR: the text (\(mixed.replacingOccurrences(of: "\n", with: " / ")))")
+        let faintOnly = (try? await textFor(draw(text: nil, qrShade: 250 / 255))) ?? ""
+        check(faintOnly == payload, "a faint QR alone: its payload (\(faintOnly))")
+        let only = (try? await textFor(draw(text: nil, qrShade: 0))) ?? ""
+        check(only == payload, "a QR alone: its payload (\(only))")
+        sem.signal()
+    }
+    sem.wait()
+
 case "render":
     // args: out.png light|dark. Draws the window off screen (run from a copy inside the app bundle so the
     // language files and the icon are found; -AppleLanguages picks the language).
