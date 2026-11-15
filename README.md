@@ -1,5 +1,3 @@
-English · [Українська](README_UA.md) · [Русский](README_RU.md)
-
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/icon-dark.png"><img src="docs/icon.png" width="128" alt="Pixlift icon"></picture>
 
 # Pixlift: screenshots, screen recording, text and color for Mac
@@ -8,7 +6,7 @@ Free, open source app for macOS that takes screenshots and records the screen, o
 
 Copy Text is the recognition of [OCR](https://github.com/geragarazagh/ocr) and Copy Color the picker of [#HEX](https://github.com/geragarazagh/hex): the author’s single-function apps, which stay available on their own.
 
-Apple silicon, macOS 13 or later. Interface in English, Ukrainian and Russian. Signed with a Developer ID and notarized by Apple.
+Apple silicon, macOS 13 or later. Signed with a Developer ID and notarized by Apple.
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/scene.webp"><img src="docs/scene-light.webp" alt="Preview with the Wright brothers’ telegram of 17 December 1903; beside it a note holding a capture of the whole screen, which holds the same screen again, smaller each time; on the Desktop five captures named by their time, 2025-12-17 17-25-00 to 17-25-59"></picture>
 
@@ -126,7 +124,6 @@ This command prints the text of pictures instead of copying it:
 - Requires: Apple silicon, macOS 13 or later.
 - Permissions: Screen & System Audio Recording, Microphone. Network: only the update check.
 - Signed with a Developer ID and notarized by Apple.
-- Interface: English, Ukrainian, Russian, from the language of macOS.
 - Code: Swift with AppKit, ScreenCaptureKit, AVFoundation and Vision, about 2,100 lines, and the Sparkle framework for updates.
 - License: MIT. Sparkle is MIT too; its license comes with the app and is in `THIRD-PARTY-LICENSES.md`.
 
