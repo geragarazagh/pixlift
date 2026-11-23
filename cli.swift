@@ -16,13 +16,19 @@ import AVFoundation
 private let pixliftCliName = "pixlift-cli"
 
 private let pixAppBundle: Bundle = {
-    let real = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+    // executableURL, not argv[0]: run by name from PATH (the Homebrew symlink) argv[0] is the bare name, and the bundle
+    // three levels above it is the current folder's, not the app's (measured 2026-11-23: version 0, settings unread).
+    let real = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
     let appURL = real.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     return Bundle(url: appURL) ?? .main
 }()
 
+// Run from inside the bundle the process is the app itself: a suite named after its own id is refused (nil, and a
+// console line «will not work» on every run), and .standard is that domain already. Through a symlink Bundle.main has
+// no id, so the suite is what reaches the app's settings.
 private var pixDefaults: UserDefaults {
-    pixAppBundle.bundleIdentifier.flatMap(UserDefaults.init(suiteName:)) ?? .standard
+    guard let id = pixAppBundle.bundleIdentifier, id != Bundle.main.bundleIdentifier else { return .standard }
+    return UserDefaults(suiteName: id) ?? .standard
 }
 
 private func pixFail(_ s: String) -> Never {
@@ -117,13 +123,16 @@ private func runScreenshot(_ args: [String], usage: String) -> Never {
         pixFail("No Screen Recording permission for the terminal running \(pixliftCliName).")
     }
     let temp = FileManager.default.temporaryDirectory.appendingPathComponent("pixlift-color-\(UUID().uuidString).png")
-    defer { try? FileManager.default.removeItem(at: temp) }
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
     p.arguments = ["-x", "-R", "\(Int(x)),\(Int(y)),1,1", temp.path]
     do { try p.run(); p.waitUntilExit() } catch { pixFail("screencapture failed: \(error)") }
+    // Read, then removed at once: every way out below is exit(), which skips a defer (a defer here left one PNG of the
+    // screen in TMPDIR per call, 2026-11-23).
+    let data = try? Data(contentsOf: temp)
+    try? FileManager.default.removeItem(at: temp)
     guard p.terminationStatus == 0,
-          let data = try? Data(contentsOf: temp),
+          let data,
           let rep = NSBitmapImageRep(data: data),
           let color = rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2),
           let hex = App.hex(color) else {
