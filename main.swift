@@ -28,25 +28,13 @@ func answersForItself() -> Bool {
 }
 
 let args = CommandLine.arguments
+// CLI modes (cli.swift) run and exit; the GUI app continues below.
+_ = MainActor.assumeIsolated { runPixliftCLI(args) }
 // The command-line modes act only for a caller that answers for itself (security pass 2026-11-14): started by another
-// program as an app, --file would read pictures with Pixlift's own folder permissions (the Desktop's or a picked folder's, which saving
-// screenshots there needs) and hand their text to that program, and --pasteboard would send every capture to a
-// pasteboard of its choosing.
+// program as an app, --file (cli.swift) would read pictures with Pixlift's own folder permissions (the Desktop's or a
+// picked folder's, which saving screenshots there needs) and hand their text to that program, and --pasteboard would
+// send every capture to a pasteboard of its choosing.
 let commandLine = !answersForItself()
-if args.count > 1 && args[1] == "--file" {
-    guard commandLine else { FileHandle.standardError.write(Data("--file works only from a terminal\n".utf8)); exit(1) }
-    let sem = DispatchSemaphore(value: 0)
-    Task.detached {
-        for path in args.dropFirst(2) {
-            guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
-                  let img = CGImageSourceCreateImageAtIndex(src, 0, nil) else { print("unreadable: \(path)"); continue }
-            do { print(try await textFor(img)) } catch { print("error: \(error)") }
-        }
-        sem.signal()
-    }
-    sem.wait()
-    exit(0)
-}
 let pasteboard = commandLine && args.count > 2 && args[1] == "--pasteboard" ? NSPasteboard(name: .init(args[2])) : .general
 
 MainActor.assumeIsolated {
