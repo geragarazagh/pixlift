@@ -125,11 +125,13 @@ enum Action: CaseIterable {
         }
     }
 
-    var alertOpen = false
+    private var ownAlertOpen = false
+    /// An alert of the app's own or report()'s is open.
+    var alertOpen: Bool { ownAlertOpen || reportsOpen > 0 }
     /// Index of the button pressed. A press of any key while an alert is open does nothing.
     func alert(_ title: String, _ info: String, _ buttons: [String]) -> Int {
-        alertOpen = true
-        defer { alertOpen = false }
+        ownAlertOpen = true
+        defer { ownAlertOpen = false }
         NSApp.activate(ignoringOtherApps: true)
         let a = NSAlert()
         a.messageText = title

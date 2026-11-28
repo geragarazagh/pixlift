@@ -114,7 +114,14 @@ func L(_ s: String) -> String { NSLocalizedString(s, comment: "") }
 // Carbon's handler is a C function and can capture nothing.
 private var onHotKey: ((UInt32) -> Void)?
 
+/// Above 0 while report()'s alert is open: the app's keys do nothing then, as with its own alerts (App.alertOpen). Without it
+/// a key pressed under an error alert ran its action inside the alert's modal loop, and a failing action stacked a
+/// second alert on the first (stress matrix 2026-11-27: recording toggled 5 times a second, up to 52 s beachballs).
+var reportsOpen = 0   // a counter: report() can be reached again from inside its own modal loop
+
 func report(_ title: String, _ details: String) {
+    reportsOpen += 1
+    defer { reportsOpen -= 1 }
     NSApp.activate(ignoringOtherApps: true)
     let a = NSAlert()
     a.messageText = title
@@ -158,6 +165,8 @@ final class AppIconView: NSImageView {
     var labels: [NSTextField] = []
     var notes: [NSTextField] = []  // a row's state, under its label
     let loginSwitch = NSSwitch()
+    /// The key monitor's token, kept so the monitor is owned (an unkept token shows in `leaks` as a root leak).
+    private var keyMonitor: Any?
 
     static let W: CGFloat = 420, M: CGFloat = 20, controlW: CGFloat = 160, rowH: CGFloat = 34
     let rowsY: CGFloat             // the lowest key row
@@ -196,7 +205,7 @@ final class AppIconView: NSImageView {
         }, 1, &specs, nil, nil)
 
         build()
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
             guard let self else { return e }
             return self.keyDown(e)
         }
